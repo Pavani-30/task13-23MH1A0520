@@ -1,0 +1,67 @@
+services:
+  app:
+    build: .
+    container_name: auth_app
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${API_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - auth_network
+
+  db:
+    image: postgres:13-alpine
+    container_name: auth_db
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./seeds:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth_network
+
+  cache:
+    image: redis:6.2-alpine
+    container_name: auth_cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  auth_network:
+    driver: bridge
